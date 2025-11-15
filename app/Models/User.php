@@ -7,11 +7,17 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Passport\HasApiTokens;
+use Illuminate\Database\Eloquent\Builder;
+use App\Helpers\IdEncoder;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
+
+    protected $table = 'users_master';
+    protected $primaryKey = 'userid';
+    protected $appends = ['encoded_id'];
 
     /**
      * The attributes that are mass assignable.
@@ -20,6 +26,7 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
     ];
@@ -45,5 +52,25 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    protected static function booted()
+    {
+        static::addGlobalScope('active_not_deleted', function (Builder $builder) {
+            $builder->where('is_active', 1)
+                ->whereNull('deleted_at');
+        });
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->withoutGlobalScope('active_not_deleted')
+            ->where('is_active', 1)
+            ->whereNull('deleted_at');
+    }
+
+    public function getEncodedIdAttribute()
+    {
+        return IdEncoder::encode($this->userid);
     }
 }

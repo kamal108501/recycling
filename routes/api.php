@@ -8,7 +8,10 @@ Route::prefix('v1')->group(function () {
 
     Route::prefix('auth')->group(function () {
         Route::post('register', [AuthController::class, 'register']);
-        Route::post('login', [AuthController::class, 'login']);
+
+        Route::post('checkAppVersion', [AuthController::class, 'checkAppVersion']);
+        // done
+        Route::post('appUserLogin', [AuthController::class, 'appUserLogin']);
         Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
         Route::get('/password/reset/{token}', function ($token) {
             return response()->json([
@@ -23,6 +26,7 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware('auth:api')->group(function () {
         Route::get('profile', [AuthController::class, 'profile']);
-        Route::post('logout', [AuthController::class, 'logout']);
+        // done
+        Route::post('appUserLogout', [AuthController::class, 'appUserLogout']);
     });
 });
