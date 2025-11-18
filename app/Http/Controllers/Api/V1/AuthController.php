@@ -13,7 +13,6 @@ use App\Models\UsersPhoneDetails;
 use Illuminate\Support\Facades\DB;
 use App\Rules\ValidPublicKey;
 use Illuminate\Support\Facades\Validator;
-use App\Helpers\IdHelper;
 
 class AuthController extends CommonApiController
 {
@@ -310,7 +309,22 @@ class AuthController extends CommonApiController
                 'name'       => 'required|string|max:255',
                 'email'      => 'required|email|unique:users_master,email',
                 'username'   => 'required|string|unique:users_master,username',
-                'password'   => 'required|string|min:6|confirmed',
+                'usermobile' => [
+                    'required',
+                    'regex:/^[0-9]{10}$/',
+                    'unique:users_master,usermobile',
+                ],
+                'password' => [
+                    'required',
+                    'string',
+                    'min:6',
+                    'max:20',
+                    Password::min(8)
+                        ->mixedCase()
+                        ->letters()
+                        ->numbers()
+                        ->symbols(),
+                ],
             ]);
 
             CommonApiController::checkValidation($validator, $request);
@@ -326,47 +340,71 @@ class AuthController extends CommonApiController
 
             // Create user
             $user = User::create([
-                'name'     => $request->name,
-                'email'    => $request->email,
-                'username' => $request->username,
-                'password' => bcrypt($request->password),
+                'name'       => $request->name,
+                'email'      => $request->email,
+                'username'   => $request->username,
+                'usermobile' => $request->usermobile,
+                'password'   => bcrypt($request->password),
                 'app_last_login_at' => currentDT()
             ]);
 
+            $user = $user->fresh();
+
             $userid = $user->userid;
 
-            $token = $user->createToken('authToken')->accessToken;
+            $tokenResult = $user->createToken('authToken');
+            $accessToken = $tokenResult->accessToken;
+            $tokenModel  = $tokenResult->token;
+
+            $expiresIn = now()->diffInSeconds($tokenModel->expires_at, false);
+            $expiresIn = max(0, (int) $expiresIn);
+
+            $refreshToken = Str::random(40);
+
+            DB::table('oauth_refresh_tokens')->insert([
+                'id' => $refreshToken,
+                'access_token_id' => $tokenModel->id,
+                'revoked' => false,
+                'expires_at' => now()->addDays(30),
+            ]);
 
             $data = [
                 'userid'            => $userid,
                 'app_version'       => $request->app_version,
                 'phone_os_version'  => $request->phone_os_version,
                 'phone_uuid'        => $request->phone_uuid,
-                'user_access_token' => $token,
-                'device_token'      => $request->device_token ?? '',
-                'imei_no'           => $request->imei_no ?? '',
+                'user_access_token' => $refreshToken,
+                'device_token'      => $request->device_token,
+                'imei_no'           => $request->imei_no,
                 'mobile_type'       => $request->mobile_type,
             ];
 
             UsersPhoneDetails::updateOrCreate(
                 [
-                    'phone_uuid' => $request->phone_uuid
+                    'user_access_token' => $refreshToken,
+                    'phone_uuid'        => $request->phone_uuid,
                 ],
                 $data
             );
 
-            DB::table('users_phone_details_alias')->insert($data);
+            DB::table('users_phone_details_alias')
+                ->insert($data);
 
-            // Prepare response record
             $userRecord = [
-                'token'             => $token,
-                'userid'            => encode($userid),
-                'username'          => $user->username,
-                'email'             => $user->email,
-                'usermobile'        => $user->usermobile ?? '',
-                'name'              => $user->name,
-                'last_login_at'     => $user->app_last_login_at,
-                'user_access_token' => $token
+                'token_type'           => 'Bearer',
+                'expires_in'           => $expiresIn,
+                'access_token'         => $accessToken,
+                'refresh_token'        => $refreshToken,
+                'is_profile_completed' => true,
+                'is_account_verified'  => true,
+                'userid'               => encode($userid),
+                'username'             => $user->username,
+                'email'                => $user->email,
+                'usermobile'           => $user->usermobile ?? '',
+                'name'                 => $user->name,
+                'is_active'            => $user->is_active,
+                'profile_img'          => createFullImagePathForAPI('images/users', $user->profile_img),
+                'last_login_at'        => $user->app_last_login_at,
             ];
 
             return CommonApiController::endRequest(true, 200, 'user registerd successfully.', array($userRecord), $request, $startTime);
@@ -419,40 +457,39 @@ class AuthController extends CommonApiController
         }
     }
 
+    // public function forgotPassword(Request $request)
+    // {
+    //     $request->validate(['email' => 'required|email']);
 
-    public function forgotPassword(Request $request)
-    {
-        $request->validate(['email' => 'required|email']);
+    //     $status = Password::sendResetLink($request->only('email'));
 
-        $status = Password::sendResetLink($request->only('email'));
+    //     if ($status === Password::RESET_LINK_SENT) {
+    //         return response()->json(['message' => 'Password reset link sent to your email.'], 200);
+    //     }
 
-        if ($status === Password::RESET_LINK_SENT) {
-            return response()->json(['message' => 'Password reset link sent to your email.'], 200);
-        }
+    //     return response()->json(['message' => __($status)], 400);
+    // }
 
-        return response()->json(['message' => __($status)], 400);
-    }
+    // public function resetPassword(Request $request)
+    // {
+    //     $request->validate([
+    //         'token'    => 'required',
+    //         'email'    => 'required|email',
+    //         'password' => 'required|min:6|confirmed',
+    //     ]);
 
-    public function resetPassword(Request $request)
-    {
-        $request->validate([
-            'token'    => 'required',
-            'email'    => 'required|email',
-            'password' => 'required|min:6|confirmed',
-        ]);
+    //     $status = Password::reset(
+    //         $request->only('email', 'password', 'password_confirmation', 'token'),
+    //         function ($user, $password) {
+    //             $user->forceFill(['password' => Hash::make($password)])->save();
+    //             $user->tokens()->delete(); // revoke old tokens
+    //         }
+    //     );
 
-        $status = Password::reset(
-            $request->only('email', 'password', 'password_confirmation', 'token'),
-            function ($user, $password) {
-                $user->forceFill(['password' => Hash::make($password)])->save();
-                $user->tokens()->delete(); // revoke old tokens
-            }
-        );
+    //     if ($status === Password::PASSWORD_RESET) {
+    //         return response()->json(['message' => 'Password has been reset successfully.'], 200);
+    //     }
 
-        if ($status === Password::PASSWORD_RESET) {
-            return response()->json(['message' => 'Password has been reset successfully.'], 200);
-        }
-
-        return response()->json(['message' => __($status)], 400);
-    }
+    //     return response()->json(['message' => __($status)], 400);
+    // }
 }

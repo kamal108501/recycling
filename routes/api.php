@@ -7,22 +7,22 @@ use App\Http\Controllers\Api\V1\AuthController;
 Route::prefix('v1')->group(function () {
 
     Route::prefix('auth')->group(function () {
-        Route::post('register', [AuthController::class, 'register']);
-
         Route::post('checkAppVersion', [AuthController::class, 'checkAppVersion']);
-        // done
+
+        Route::post('appUserRegister', [AuthController::class, 'appUserRegister']);
+
         Route::post('appUserLogin', [AuthController::class, 'appUserLogin']);
-        Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
-        Route::get('/password/reset/{token}', function ($token) {
-            return response()->json([
-                'message' => 'Password reset route placeholder.',
-                'token'   => $token,
-                'email'   => request('email'),
-            ]);
-        })->name('password.reset-password');
+        // Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
+        // Route::get('/password/reset/{token}', function ($token) {
+        //     return response()->json([
+        //         'message' => 'Password reset route placeholder.',
+        //         'token'   => $token,
+        //         'email'   => request('email'),
+        //     ]);
+        // })->name('password.reset-password');
     });
 
-    Route::post('auth/reset-password', [AuthController::class, 'resetPassword']);
+    // Route::post('auth/reset-password', [AuthController::class, 'resetPassword']);
 
     Route::middleware('auth:api')->group(function () {
         Route::post('appUserProfile', [AuthController::class, 'appUserProfile']);
