@@ -389,36 +389,28 @@ class AuthController extends CommonApiController
 
             CommonApiController::checkValidation($validator, $request);
 
-            $user = $request->user();
+            $userid = decode($request->user_id);
 
-            if (!$user) {
-                return CommonApiController::endRequest(
-                    false,
-                    401,
-                    'Invalid or expired token.',
-                    [],
-                    $request,
-                    $startTime
-                );
-            }
-
-            $phoneDetails = UsersPhoneDetails::where('userid', $user->userid)
-                ->orderBy('id', 'DESC')
+            $user = DB::table('users_master')
+                ->select('*')
+                ->where('userid', $userid)
                 ->first();
 
+            if (!$user) {
+                return CommonApiController::endRequest(false, 404, 'User not found or inactive.', [], $request, $startTime);
+            }
+
             $userRecord = [
-                'userid'            => encode($user->userid),
-                'username'          => $user->username,
-                'email'             => $user->email,
-                'usermobile'        => $user->usermobile ?? '',
-                'name'              => $user->name,
-                'last_login_at'     => $user->app_last_login_at,
-                'app_version'       => $phoneDetails->app_version ?? '',
-                'phone_os_version'  => $phoneDetails->phone_os_version ?? '',
-                'phone_uuid'        => $phoneDetails->phone_uuid ?? '',
-                'mobile_type'       => $phoneDetails->mobile_type ?? '',
-                'device_token'      => $phoneDetails->device_token ?? '',
-                'imei_no'           => $phoneDetails->imei_no ?? '',
+                'is_profile_completed' => true,
+                'is_account_verified'  => true,
+                'userid'               => encode($userid),
+                'username'             => $user->username,
+                'email'                => $user->email,
+                'usermobile'           => $user->usermobile ?? '',
+                'name'                 => $user->name,
+                'is_active'            => $user->is_active,
+                'profile_img'          => createFullImagePathForAPI('images/users', $user->profile_img),
+                'last_login_at'        => $user->app_last_login_at,
             ];
 
             return CommonApiController::endRequest(true, 200, 'user profile fetched successfully.', array($userRecord), $request, $startTime);

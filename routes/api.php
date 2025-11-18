@@ -25,7 +25,7 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/reset-password', [AuthController::class, 'resetPassword']);
 
     Route::middleware('auth:api')->group(function () {
-        Route::get('profile', [AuthController::class, 'profile']);
+        Route::post('appUserProfile', [AuthController::class, 'appUserProfile']);
         Route::post('appUserUpdatePassword', [AuthController::class, 'appUserUpdatePassword']);
         // done
         Route::post('appUserLogout', [AuthController::class, 'appUserLogout']);
