@@ -6,7 +6,7 @@ use App\Http\Controllers\Api\V1\CommonApiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Password;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Support\Str;
 use App\Models\User;
 use App\Models\UsersPhoneDetails;
@@ -175,7 +175,6 @@ class AuthController extends CommonApiController
                 'last_login_at'        => $last_login_at,
             ];
 
-
             return CommonApiController::endRequest(true, 200, 'You have successfully logged in.', array($userRecord), $request, $startTime);
         } catch (Exception $ex) {
             return CommonApiController::endRequest(false, 500, $ex->getMessage(), array(), $request, $startTime);
@@ -226,12 +225,11 @@ class AuthController extends CommonApiController
 
             CommonApiController::checkValidation($validator, $request);
 
-            $userRecord = DB::table('users_master as u')
-                ->select('u.userid', 'u.password')
-                ->leftJoin('company_master as c', 'c.id', '=', 'u.company_id')
-                ->leftJoin('role_master as r', 'r.id', '=', 'u.roleid')
-                ->where('u.userid', $request->user_id)
-                ->where('u.status', 1)
+            $userid = decode($request->user_id);
+
+            $userRecord = DB::table('users_master')
+                ->select('*')
+                ->where('userid', $userid)
                 ->first();
 
             if (!$userRecord) {
@@ -239,11 +237,11 @@ class AuthController extends CommonApiController
             }
 
             if (!Hash::check($request->user_old_password, $userRecord->password)) {
-                return CommonApiController::endRequest(false, 422, 'Old password does not match.', [], $request, $startTime);
+                return CommonApiController::endRequest(false, 400, 'Old password does not match.', [], $request, $startTime);
             }
 
             DB::table('users_master')
-                ->where('userid', $request->user_id)
+                ->where('userid', $userid)
                 ->update([
                     'password' => Hash::make($request->user_new_password),
                 ]);
@@ -253,7 +251,6 @@ class AuthController extends CommonApiController
             CommonApiController::endRequest(false, 500, $e->getMessage(), array(), $request, $startTime);
         }
     }
-
 
     /*
      * @category MOBILE_APP

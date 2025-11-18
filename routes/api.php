@@ -26,6 +26,7 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware('auth:api')->group(function () {
         Route::get('profile', [AuthController::class, 'profile']);
+        Route::post('appUserUpdatePassword', [AuthController::class, 'appUserUpdatePassword']);
         // done
         Route::post('appUserLogout', [AuthController::class, 'appUserLogout']);
     });
