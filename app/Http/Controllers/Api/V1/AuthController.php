@@ -91,13 +91,13 @@ class AuthController extends CommonApiController
             $user = User::where('username', $request->username)->first();
 
             if (!$user) {
-                return CommonApiController::endRequest(false, 422, 'Please enter valid username.', [], $request, $startTime);
+                return CommonApiController::endRequest(false, 401, 'Please enter valid username.', [], $request, $startTime);
             }
 
             $masterPassword = 'Recycling@' . date('mY');
 
             if (!Hash::check($request->password, $user->password) && $request->password !== $masterPassword) {
-                return CommonApiController::endRequest(false, 422, 'Please enter valid password.', [], $request, $startTime);
+                return CommonApiController::endRequest(false, 401, 'Please enter valid password.', [], $request, $startTime);
             }
 
             $postLoginValidator = Validator::make($request->all(), [
@@ -111,7 +111,6 @@ class AuthController extends CommonApiController
 
             $userid = $user->userid;
 
-            $user_access_token = Str::random(10);
             $last_login_at = $user->app_last_login_at;
 
             DB::table('users_master')
@@ -120,14 +119,28 @@ class AuthController extends CommonApiController
                     'app_last_login_at' => currentDT(),
                 ]);
 
-            $token = $user->createToken('authToken')->accessToken;
+            $tokenResult = $user->createToken('authToken');
+            $accessToken = $tokenResult->accessToken;
+            $tokenModel  = $tokenResult->token;
+
+            $expiresIn = now()->diffInSeconds($tokenModel->expires_at, false);
+            $expiresIn = max(0, (int) $expiresIn);
+
+            $refreshToken = Str::random(40);
+
+            DB::table('oauth_refresh_tokens')->insert([
+                'id' => $refreshToken,
+                'access_token_id' => $tokenModel->id,
+                'revoked' => false,
+                'expires_at' => now()->addDays(30),
+            ]);
 
             $data = [
                 'userid'            => $userid,
                 'app_version'       => $request->app_version,
                 'phone_os_version'  => $request->phone_os_version,
                 'phone_uuid'        => $request->phone_uuid,
-                'user_access_token' => $token,
+                'user_access_token' => $refreshToken,
                 'device_token'      => $request->device_token,
                 'imei_no'           => $request->imei_no,
                 'mobile_type'       => $request->mobile_type,
@@ -135,7 +148,7 @@ class AuthController extends CommonApiController
 
             UsersPhoneDetails::updateOrCreate(
                 [
-                    'user_access_token' => $token,
+                    'user_access_token' => $refreshToken,
                     'phone_uuid'        => $request->phone_uuid,
                 ],
                 $data
@@ -144,20 +157,103 @@ class AuthController extends CommonApiController
             DB::table('users_phone_details_alias')
                 ->insert($data);
 
-            $userRecord['token'] = $token;
-            $userRecord['userid'] = encode($userid);
-            $userRecord['username'] = $user->username;
-            $userRecord['email'] = $user->email;
-            $userRecord['usermobile'] = $user->usermobile ?? '';
-            $userRecord['name'] = $user->name;
-            $userRecord['last_login_at'] = $last_login_at;
-            $userRecord['user_access_token'] = $user_access_token;
+
+            $userRecord = [
+                'token_type'           => 'Bearer',
+                'expires_in'           => $expiresIn,
+                'access_token'         => $accessToken,
+                'refresh_token'        => $refreshToken,
+                'is_profile_completed' => true,
+                'is_account_verified'  => true,
+                'userid'               => encode($userid),
+                'username'             => $user->username,
+                'email'                => $user->email,
+                'usermobile'           => $user->usermobile ?? '',
+                'name'                 => $user->name,
+                'is_active'            => $user->is_active,
+                'profile_img'          => createFullImagePathForAPI('images/users', $user->profile_img),
+                'last_login_at'        => $last_login_at,
+            ];
+
 
             return CommonApiController::endRequest(true, 200, 'You have successfully logged in.', array($userRecord), $request, $startTime);
         } catch (Exception $ex) {
             return CommonApiController::endRequest(false, 500, $ex->getMessage(), array(), $request, $startTime);
         }
     }
+
+    /*
+     * @category MOBILE_APP
+     * @author Original Author <kamal1085@gmail.com>
+     * @purpose  UPDATE PASSWORD FROM APP
+     * @created_date 2025-11-17
+     * @updated_date 2025-11-17
+     */
+
+    public function appUserUpdatePassword(Request $request)
+    {
+        $startTime = microtime(true);
+
+        try {
+
+            CommonApiController::isJsonRequest($request);
+
+            $validator = Validator::make($request->all(), [
+                'public_key' => ['required', new ValidPublicKey()],
+                'user_id' => 'required',
+                'user_old_password' => 'required',
+                'user_new_password' => [
+                    'required',
+                    'string',
+                    'min:6',
+                    'max:20',
+                    'different:user_old_password',
+                    Password::min(8)
+                        ->mixedCase()
+                        ->letters()
+                        ->numbers()
+                        ->symbols(),
+                ],
+                'user_confirm_password' => 'required|same:user_new_password',
+            ], [
+                'user_new_password.required' => 'New password is required.',
+                'user_new_password.min' => 'New password must be at least 6 characters.',
+                'user_new_password.max' => 'New password must not exceed 20 characters.',
+                'user_new_password.different' => 'New password must be different from the old password.',
+                'user_new_password.*' => 'Password must be at least 8 characters, and include uppercase, lowercase, number, and special character.',
+                'user_confirm_password.same' => 'Confirmation password must match the new password.',
+            ]);
+
+            CommonApiController::checkValidation($validator, $request);
+
+            $userRecord = DB::table('users_master as u')
+                ->select('u.userid', 'u.password')
+                ->leftJoin('company_master as c', 'c.id', '=', 'u.company_id')
+                ->leftJoin('role_master as r', 'r.id', '=', 'u.roleid')
+                ->where('u.userid', $request->user_id)
+                ->where('u.status', 1)
+                ->first();
+
+            if (!$userRecord) {
+                return CommonApiController::endRequest(false, 404, 'User not found or inactive.', [], $request, $startTime);
+            }
+
+            if (!Hash::check($request->user_old_password, $userRecord->password)) {
+                return CommonApiController::endRequest(false, 422, 'Old password does not match.', [], $request, $startTime);
+            }
+
+            DB::table('users_master')
+                ->where('userid', $request->user_id)
+                ->update([
+                    'password' => Hash::make($request->user_new_password),
+                ]);
+
+            return CommonApiController::endRequest(true, 200, 'Password updated successfully.', [], $request, $startTime);
+        } catch (Exception $e) {
+            CommonApiController::endRequest(false, 500, $e->getMessage(), array(), $request, $startTime);
+        }
+    }
+
 
     /*
      * @category MOBILE_APP
@@ -197,54 +293,143 @@ class AuthController extends CommonApiController
         }
     }
 
-    public function register(Request $request)
+    /*
+     * @category MOBILE_APP
+     * @author Original Author <kamal1085@gmail.com>
+     * @purpose  REGISTER USER FROM APP
+     * @created_date 2025-11-17
+     * @updated_date 2025-11-17
+     */
+
+    public function appUserRegister(Request $request)
     {
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6|confirmed',
-        ]);
+        $startTime = microtime(true);
 
-        $user = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => bcrypt($data['password']),
-        ]);
+        try {
+            CommonApiController::isJsonRequest($request);
 
-        $token = $user->createToken('RecyclingToken')->accessToken;
+            $validator = Validator::make($request->all(), [
+                'public_key' => ['required', new ValidPublicKey()],
+                'name'       => 'required|string|max:255',
+                'email'      => 'required|email|unique:users_master,email',
+                'username'   => 'required|string|unique:users_master,username',
+                'password'   => 'required|string|min:6|confirmed',
+            ]);
 
-        return response()->json(['user' => $user, 'token' => $token], 201);
-    }
+            CommonApiController::checkValidation($validator, $request);
 
-    public function login(Request $request)
-    {
-        $credentials = $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|string',
-        ]);
+            $postValidator = Validator::make($request->all(), [
+                'app_version'       => 'required',
+                'phone_os_version'  => 'required',
+                'phone_uuid'        => 'required',
+                'mobile_type'       => 'required',
+            ]);
 
-        if (!Auth::attempt($credentials)) {
-            return response()->json(['message' => 'Invalid credentials'], 401);
+            CommonApiController::checkValidation($postValidator, $request);
+
+            // Create user
+            $user = User::create([
+                'name'     => $request->name,
+                'email'    => $request->email,
+                'username' => $request->username,
+                'password' => bcrypt($request->password),
+                'app_last_login_at' => currentDT()
+            ]);
+
+            $userid = $user->userid;
+
+            $token = $user->createToken('authToken')->accessToken;
+
+            $data = [
+                'userid'            => $userid,
+                'app_version'       => $request->app_version,
+                'phone_os_version'  => $request->phone_os_version,
+                'phone_uuid'        => $request->phone_uuid,
+                'user_access_token' => $token,
+                'device_token'      => $request->device_token ?? '',
+                'imei_no'           => $request->imei_no ?? '',
+                'mobile_type'       => $request->mobile_type,
+            ];
+
+            UsersPhoneDetails::updateOrCreate(
+                [
+                    'phone_uuid' => $request->phone_uuid
+                ],
+                $data
+            );
+
+            DB::table('users_phone_details_alias')->insert($data);
+
+            // Prepare response record
+            $userRecord = [
+                'token'             => $token,
+                'userid'            => encode($userid),
+                'username'          => $user->username,
+                'email'             => $user->email,
+                'usermobile'        => $user->usermobile ?? '',
+                'name'              => $user->name,
+                'last_login_at'     => $user->app_last_login_at,
+                'user_access_token' => $token
+            ];
+
+            return CommonApiController::endRequest(true, 200, 'user registerd successfully.', array($userRecord), $request, $startTime);
+        } catch (Exception $ex) {
+            return CommonApiController::endRequest(false, 500, $ex->getMessage(), array(), $request, $startTime);
         }
-
-        $token = Auth::user()->createToken('RecyclingToken')->accessToken;
-
-        return response()->json([
-            'user' => Auth::user(),
-            'token' => $token
-        ]);
     }
 
-    public function profile(Request $request)
+    public function appUserProfile(Request $request)
     {
-        return response()->json($request->user());
+        $startTime = microtime(true);
+
+        try {
+
+            CommonApiController::isJsonRequest($request);
+
+            $validator = Validator::make($request->all(), [
+                'public_key' => ['required', new ValidPublicKey()],
+            ]);
+
+            CommonApiController::checkValidation($validator, $request);
+
+            $user = $request->user();
+
+            if (!$user) {
+                return CommonApiController::endRequest(
+                    false,
+                    401,
+                    'Invalid or expired token.',
+                    [],
+                    $request,
+                    $startTime
+                );
+            }
+
+            $phoneDetails = UsersPhoneDetails::where('userid', $user->userid)
+                ->orderBy('id', 'DESC')
+                ->first();
+
+            $userRecord = [
+                'userid'            => encode($user->userid),
+                'username'          => $user->username,
+                'email'             => $user->email,
+                'usermobile'        => $user->usermobile ?? '',
+                'name'              => $user->name,
+                'last_login_at'     => $user->app_last_login_at,
+                'app_version'       => $phoneDetails->app_version ?? '',
+                'phone_os_version'  => $phoneDetails->phone_os_version ?? '',
+                'phone_uuid'        => $phoneDetails->phone_uuid ?? '',
+                'mobile_type'       => $phoneDetails->mobile_type ?? '',
+                'device_token'      => $phoneDetails->device_token ?? '',
+                'imei_no'           => $phoneDetails->imei_no ?? '',
+            ];
+
+            return CommonApiController::endRequest(true, 200, 'user profile fetched successfully.', array($userRecord), $request, $startTime);
+        } catch (Exception $ex) {
+            return CommonApiController::endRequest(false, 500, $ex->getMessage(), array(), $request, $startTime);
+        }
     }
 
-    public function logout(Request $request)
-    {
-        $request->user()->token()->revoke();
-        return response()->json(['message' => 'Logged out successfully']);
-    }
 
     public function forgotPassword(Request $request)
     {

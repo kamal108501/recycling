@@ -30,7 +30,7 @@ return [
 
         'main' => [
             'salt' => 'recycling',
-            'length' => 10,
+            'length' => 24,
             // 'alphabet' => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'
         ],
 

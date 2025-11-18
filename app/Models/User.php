@@ -71,6 +71,6 @@ class User extends Authenticatable
 
     public function getEncodedIdAttribute()
     {
-        return IdEncoder::encode($this->userid);
+        return encode($this->userid);
     }
 }

@@ -79,7 +79,7 @@ class CommonApiController extends Controller
         if ($validator->fails()) {
             $startTime = microtime(true);
             $message = $validator->errors()->first();
-            $this->endRequest(false, 205, $message, array(), $request, $startTime);
+            $this->endRequest(false, 400, $message, array(), $request, $startTime);
         }
     }
 
