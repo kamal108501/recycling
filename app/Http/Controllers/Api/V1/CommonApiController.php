@@ -148,7 +148,7 @@ class CommonApiController extends Controller
 
         $filename = uniqid() . '.' . $extension; // You can choose a different extension if needed
 
-        $folderPath = public_path('share/' . $folderName);
+        $folderPath = public_path($folderName);
 
         if (!File::exists($folderPath)) {
             File::makeDirectory($folderPath, 0777, true);
@@ -557,5 +557,21 @@ class CommonApiController extends Controller
         $sites = $query->get();
 
         return $sites;
+    }
+
+    public function fetchUserRecord($updatedUser)
+    {
+        return [
+            'is_profile_completed' => true,
+            'is_account_verified'  => true,
+            'userid'               => encode($updatedUser->userid),
+            'username'             => $updatedUser->username,
+            'email'                => $updatedUser->email,
+            'usermobile'           => $updatedUser->usermobile ?? '',
+            'name'                 => $updatedUser->name,
+            'is_active'            => $updatedUser->is_active,
+            'profile_img'          => createFullImagePathForAPI('images/users', $updatedUser->profile_img),
+            'last_login_at'        => $updatedUser->app_last_login_at,
+        ];
     }
 }

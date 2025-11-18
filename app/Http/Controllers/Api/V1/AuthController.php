@@ -413,6 +413,85 @@ class AuthController extends CommonApiController
         }
     }
 
+    /*
+     * @category MOBILE_APP
+     * @author Original Author <kamal1085@gmail.com>
+     * @purpose  UPDATE USER PROFILE FROM APP
+     * @created_date 2025-11-18
+     * @updated_date 2025-11-18
+     */
+
+    public function updateUserProfile(Request $request)
+    {
+        $startTime = microtime(true);
+
+        try {
+
+            CommonApiController::isJsonRequest($request);
+
+            $validator = Validator::make($request->all(), [
+                'public_key'  => ['required', new ValidPublicKey()],
+                'user_id'     => 'required',
+                'name'        => 'nullable|string|max:255',
+                'usermobile' => 'nullable|digits:10',
+                'profile_img' => 'nullable|string', // base64 image
+            ]);
+
+            CommonApiController::checkValidation($validator, $request);
+
+            $userid = decode($request->user_id);
+
+            $user = DB::table('users_master')
+                ->select('*')
+                ->where('userid', $userid)
+                ->first();
+
+            if (!$user) {
+                return CommonApiController::endRequest(false, 404, 'User not found or inactive.', [], $request, $startTime);
+            }
+
+            $profile_img = CommonApiController::storeBase64Image($request->profile_img, 'images/users');
+
+            $updateData = array();
+            if ($request->name != '')
+                $updateData['name'] = $request->name;
+            if ($request->usermobile != '')
+                $updateData['usermobile'] = $request->usermobile;
+            if ($profile_img != '')
+                $updateData['profile_img'] = $profile_img;
+
+            $user = User::where('userid', $userid)->first();
+            $user->update($updateData);
+            $updatedUser = $user->fresh();
+
+            // $userRecord = CommonApiController::fetchUserRecord($updatedUser);
+            $userRecord = [
+                'is_profile_completed' => true,
+                'is_account_verified'  => true,
+                'userid'               => encode($userid),
+                'username'             => $updatedUser->username,
+                'email'                => $updatedUser->email,
+                'usermobile'           => $updatedUser->usermobile ?? '',
+                'name'                 => $updatedUser->name,
+                'is_active'            => $updatedUser->is_active,
+                'profile_img'          => createFullImagePathForAPI('images/users', $updatedUser->profile_img),
+                'last_login_at'        => $updatedUser->app_last_login_at,
+            ];
+
+            return CommonApiController::endRequest(true, 200, 'user profile fetched successfully.', array($userRecord), $request, $startTime);
+        } catch (Exception $ex) {
+            return CommonApiController::endRequest(false, 500, $ex->getMessage(), array(), $request, $startTime);
+        }
+    }
+
+    /*
+     * @category MOBILE_APP
+     * @author Original Author <kamal1085@gmail.com>
+     * @purpose  FETCH USER PROFILE FROM APP
+     * @created_date 2025-11-18
+     * @updated_date 2025-11-18
+     */
+
     public function appUserProfile(Request $request)
     {
         $startTime = microtime(true);
