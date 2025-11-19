@@ -471,7 +471,7 @@ class AuthController extends CommonApiController
                 'last_login_at'        => $updatedUser->app_last_login_at,
             ];
 
-            return CommonApiController::endRequest(true, 200, 'user profile fetched successfully.', array($userRecord), $request, $startTime);
+            return CommonApiController::endRequest(true, 200, 'user profile fetched successfully.', $userRecord, $request, $startTime);
         } catch (Exception $ex) {
             return CommonApiController::endRequest(false, 500, $ex->getMessage(), array(), $request, $startTime);
         }
@@ -521,7 +521,7 @@ class AuthController extends CommonApiController
                 'last_login_at'        => $user->app_last_login_at,
             ];
 
-            return CommonApiController::endRequest(true, 200, 'user profile fetched successfully.', array($userRecord), $request, $startTime);
+            return CommonApiController::endRequest(true, 200, 'user profile fetched successfully.', $userRecord, $request, $startTime);
         } catch (Exception $ex) {
             return CommonApiController::endRequest(false, 500, $ex->getMessage(), array(), $request, $startTime);
         }
