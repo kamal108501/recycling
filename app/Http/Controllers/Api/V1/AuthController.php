@@ -402,7 +402,7 @@ class AuthController extends CommonApiController
                 'last_login_at'        => $user->app_last_login_at,
             ];
 
-            return CommonApiController::endRequest(true, 200, 'user registerd successfully.', array($userRecord), $request, $startTime);
+            return CommonApiController::endRequest(true, 200, 'user registerd successfully.', $userRecord, $request, $startTime);
         } catch (Exception $ex) {
             return CommonApiController::endRequest(false, 500, $ex->getMessage(), array(), $request, $startTime);
         }
