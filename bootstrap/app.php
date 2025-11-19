@@ -21,6 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
 
+        $exceptions->renderable(function (\App\Exceptions\ApiValidationException $e, $request) {
+            return response()->json($e->response, 400);
+        });
+
         // 🧩 OAuth / Passport authentication failure
         $exceptions->renderable(function (OAuthServerException $e, $request) {
             return response()->json([

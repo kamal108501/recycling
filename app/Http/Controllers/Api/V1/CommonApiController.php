@@ -29,19 +29,20 @@ class CommonApiController extends Controller
 
         $executionTime = microtime(true) - $startTime;
 
-        DB::table('api_logs')->insert([
-            'api_url' => $request->url(),
-            'project' => config('app.name'),
-            'method' => $request->method(),
-            'request_params' => json_encode($request->all()),
-            'response' => json_encode($response),
-            'execution_time' => number_format($executionTime, 2),
-            'created_by' => $request->userid ?? 0,
-            'created_at' => currentDT(),
-        ]);
+        // DB::table('api_logs')->insert([
+        //     'api_url' => $request->url(),
+        //     'project' => config('app.name'),
+        //     'method' => $request->method(),
+        //     'request_params' => json_encode($request->all()),
+        //     'response' => json_encode($response),
+        //     'execution_time' => number_format($executionTime, 2),
+        //     'created_by' => $request->userid ?? 0,
+        //     'created_at' => currentDT(),
+        // ]);
 
-        echo json_encode($response);
-        exit;
+        // echo json_encode($response);
+        // exit;
+        return response()->json($response, $responseCode);
     }
 
     /*
@@ -57,11 +58,9 @@ class CommonApiController extends Controller
     {
         if (!$request->isJson()) {
             //NOT VALID INPUT
-            $response['status'] = false;
-            $response['responseCode'] = 205;
-            $response['responseMessage'] = "Request JSON is not valid.";
-            echo json_encode($response);
-            die;
+            $startTime = microtime(true);
+            $message = "Request JSON is not valid.";
+            return $this->endRequest(false, 400, $message, array(), $request, $startTime);
         }
     }
 
@@ -79,7 +78,15 @@ class CommonApiController extends Controller
         if ($validator->fails()) {
             $startTime = microtime(true);
             $message = $validator->errors()->first();
-            $this->endRequest(false, 400, $message, array(), $request, $startTime);
+            $response = [
+                'responseStatus'  => false,
+                'responseCode'    => 400,
+                'responseMessage' => $message,
+            ];
+
+            $this->endRequest(false, 400, $message, $validator->errors(), $request, $startTime);
+
+            throw new \App\Exceptions\ApiValidationException($response);
         }
     }
 

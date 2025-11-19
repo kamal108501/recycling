@@ -101,8 +101,8 @@ class AuthController extends CommonApiController
 
             $postLoginValidator = Validator::make($request->all(), [
                 'app_version' => 'required',
-                'phone_os_version' => 'required',
-                'phone_uuid' => 'required',
+                // 'phone_os_version' => 'required',
+                // 'phone_uuid' => 'required',
                 'mobile_type' => 'required',
             ]);
 
@@ -162,8 +162,6 @@ class AuthController extends CommonApiController
                 'expires_in'           => $expiresIn,
                 'access_token'         => $accessToken,
                 'refresh_token'        => $refreshToken,
-                'is_profile_completed' => true,
-                'is_account_verified'  => true,
                 'userid'               => encode($userid),
                 'username'             => $user->username,
                 'email'                => $user->email,
@@ -174,7 +172,7 @@ class AuthController extends CommonApiController
                 'last_login_at'        => $last_login_at,
             ];
 
-            return CommonApiController::endRequest(true, 200, 'You have successfully logged in.', array($userRecord), $request, $startTime);
+            return CommonApiController::endRequest(true, 200, 'You have successfully logged in.', $userRecord, $request, $startTime);
         } catch (Exception $ex) {
             return CommonApiController::endRequest(false, 500, $ex->getMessage(), array(), $request, $startTime);
         }
@@ -331,8 +329,8 @@ class AuthController extends CommonApiController
 
             $postValidator = Validator::make($request->all(), [
                 'app_version'       => 'required',
-                'phone_os_version'  => 'required',
-                'phone_uuid'        => 'required',
+                // 'phone_os_version'  => 'required',
+                // 'phone_uuid'        => 'required',
                 'mobile_type'       => 'required',
             ]);
 
@@ -391,12 +389,9 @@ class AuthController extends CommonApiController
                 ->insert($data);
 
             $userRecord = [
-                'token_type'           => 'Bearer',
                 'expires_in'           => $expiresIn,
                 'access_token'         => $accessToken,
                 'refresh_token'        => $refreshToken,
-                'is_profile_completed' => true,
-                'is_account_verified'  => true,
                 'userid'               => encode($userid),
                 'username'             => $user->username,
                 'email'                => $user->email,
@@ -466,8 +461,6 @@ class AuthController extends CommonApiController
 
             // $userRecord = CommonApiController::fetchUserRecord($updatedUser);
             $userRecord = [
-                'is_profile_completed' => true,
-                'is_account_verified'  => true,
                 'userid'               => encode($userid),
                 'username'             => $updatedUser->username,
                 'email'                => $updatedUser->email,
@@ -518,8 +511,6 @@ class AuthController extends CommonApiController
             }
 
             $userRecord = [
-                'is_profile_completed' => true,
-                'is_account_verified'  => true,
                 'userid'               => encode($userid),
                 'username'             => $user->username,
                 'email'                => $user->email,
